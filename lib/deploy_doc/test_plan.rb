@@ -12,10 +12,14 @@ module DeployDoc
 
     def self.from_file(file_name)
       content = File.read(file_name)
+      self.from_str(content, file_name)
+    end
+
+    def self.from_str(content, file_name="<unknown file>")
       metadata = self.parse_metadata(content, file_name)
 
       if metadata["deployDoc"] != true
-        raise DeployDoc::Error.new("Markdown file #{file} does not have a 'deployDoc:true' metadatum")
+        raise DeployDoc::Error.new("Markdown file #{file_name} does not have a 'deployDoc:true' metadatum")
       end
 
       annotations = AnnotationParser.parse(content, file_name)
@@ -43,6 +47,7 @@ module DeployDoc
 
     attr_reader :metadata
     attr_reader :required_env_vars
+    attr_reader :steps_in_phases
 
     def initialize(metadata, required_env_vars, steps_in_phases)
       @metadata = metadata
@@ -88,45 +93,7 @@ module DeployDoc
         end
       end
 
-      JSON.dump(json)
-    end
-
-    def execute!
-      if missing_env_vars.any?
-        $stderr.puts "Missing the following required environment variables:"
-        $stderr.puts missing_envs.inspect
-        exit 1
-      end
-
-      execute_phase("pre-install")
-      begin
-        execute_phase("create-infrastructure")
-        execute_phase("run-tests")
-        return true
-      rescue Exception => e
-        p e
-        return false
-      ensure # Clean up the infrastructure
-        begin
-          execute_phase("destroy-infrastructure")
-          rescue Exception  => e
-          $stderr.puts "Failed to clean up  the infrastructure!"
-          exit 2
-        end
-      end
-    end
-
-    def execute_phase(phase_name)
-      puts "Executing phase #{phase_name}"
-      steps = @steps_in_phases[phase_name]
-
-      steps.each do |step|
-        puts "Running step #{step.full_name}"
-        system(step.shell)
-        if $?.exitstatus != 0
-          raise("Could not finish step #{step.full_name} in phase #{phase_name}")
-        end
-      end
+      JSON.pretty_generate(json)
     end
   end
 end

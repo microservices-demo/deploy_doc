@@ -1,5 +1,7 @@
 require 'json'
 require 'open3'
+$stdout.sync = true
+$stderr.sync = true
 
 class StepFailed < RuntimeError
   def initialize(phase, location)
@@ -26,19 +28,46 @@ def run_phase(all_steps, name)
       puts blue { "  + Running step #{step["line_span"]}" }
 
       shellcode = "set +e\n" + step["shell"]
-      Open3.popen2e(step["shell"]) do |stdin, stdout_stderr, wait_exit_code_of_child|
-        stdout_stderr.each do |line|
-          puts((blue { "  | "}) + line)
-        end
+      begin
+        Open3.popen2e(shellcode) do |stdin, stdout_stderr, wait_exit_code_of_child|
+          $current_io_thread = wait_exit_code_of_child
+          buffer = ""
 
-        if wait_exit_code_of_child.value != 0
-          raise StepFailed.new(name, step["line_span"])
+          loop do
+            begin
+              read = stdout_stderr.read_nonblock(1024)
+            rescue IO::EAGAINWaitReadable
+              IO.select([stdout_stderr])
+              retry
+            rescue EOFError
+              if buffer.length > 0
+                print_line(buffer)
+                break
+              end
+            end
+            buffer += read
+            line,new_buffer = buffer.split("\n",2)
+            if new_buffer != nil
+              print_line(line)
+              buffer = new_buffer
+            end
+          end
+
+          if wait_exit_code_of_child.value != 0
+            raise StepFailed.new(name, step["line_span"])
+          end
         end
+      ensure
+        $current_io_thread = nil
       end
     end
   end
 ensure
   puts
+end
+
+def print_line(line)
+  puts((blue { "  | "}) + line)
 end
 
 def bold
@@ -62,34 +91,50 @@ def blue
 end
 
 begin
-  run_phase(all_steps, "pre-install")
-rescue StepFailed => e
-  report_error(e)
-  exit 1
-end
-  
-all_passed = true
-begin
-  run_phase(all_steps, "create-infrastructure")
-  run_phase(all_steps, "run-tests")
-rescue Exception => e
-  report_error(e)
-  puts "Skipping next steps, jump to cleaning up\n"
-  all_passed = false
-end
+  begin
+    run_phase(all_steps, "pre-install")
+  rescue StepFailed => e
+    report_error(e)
+    exit 1
+  end
 
-begin
-  run_phase(all_steps, "destroy-infrastructure")
-rescue Exception => e
-  report_error(e)
-  puts "    " + bold { red { "#" * 46 } }
-  puts "    " + bold { red { "#   " } } + bold { red { underline { "Failed to clean up the infrastructure!" } } } + bold { red { "   #"}}
-  puts "    " + bold { red { "#" * 46 } }
-  exit 2
-end
+  all_passed = true
+  begin
+    begin
+      run_phase(all_steps, "create-infrastructure")
+      run_phase(all_steps, "run-tests")
+    rescue Exception => e
+      report_error(e)
+      puts "Skipping next steps, jump to cleaning up\n"
+      all_passed = false
+    end
 
-if all_passed
-  exit 0
-else
-  exit 1
+    begin
+      run_phase(all_steps, "destroy-infrastructure")
+    rescue Exception => e
+      report_error(e)
+      puts "    " + bold { red { "#" * 46 } }
+      puts "    " + bold { red { "#   " } } + bold { red { underline { "Failed to clean up the infrastructure!" } } } + bold { red { "   #"}}
+      puts "    " + bold { red { "#" * 46 } }
+      exit 2
+    end
+  end
+
+  if all_passed
+    exit 0
+  else
+    exit 1
+  end
+rescue Interrupt
+  puts bold { red { "Interrupted!" } }
+  if $current_io_thread
+    puts "Killing child process #{$current_io_thread.pid}"
+    begin
+     Process.kill("KILL",$current_io_thread.pid)
+    rescue
+      # Don't care if the PID doesn't exist anymore.
+      # All bets are off in any case.
+    end
+  end
+  exit 3
 end

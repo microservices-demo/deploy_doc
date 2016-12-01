@@ -3,7 +3,7 @@ module DeployDoc
     class AnnotationParser
       Annotation = Struct.new(:source_name, :line_span, :kind, :params, :content)
 
-      def self.parse(markdown, path="<unknown file>")
+      def self.parse(markdown, path="<unknown>")
         AnnotationParser.new(markdown, path).parse!
       end
 
@@ -29,16 +29,13 @@ module DeployDoc
         inc_line # ignore text, line by line
       end
 
-      BLOCK_START  = /^<!-- deploy-test-start (?<kind>[-\w]+)( )?(?<params>.*) -->/
-      BLOCK_END    = /^<!-- deploy-test-end -->/
+      BLOCK_START  = /^<!-- deploy-doc-start (?<kind>[-\w]+)( )?(?<params>.*) -->/
+      BLOCK_END    = /^<!-- deploy-doc-end -->/
 
-      INLINE_START = /^<!-- deploy-test-hidden (?<kind>[-\w]+)( )?(?<params>.*)/
+      INLINE_START = /^<!-- deploy-doc-hidden (?<kind>[-\w]+)( )?(?<params>.*)/
       INLINE_END   = /^-->/
 
-      SINGLE_LINE  = /^<!-- deploy-test (?<kind>[-\w]+)( )?(?<params>.*) -->/
-
-
-      PARSE_METHOD_PREFIX = "parse_pragma_"
+      SINGLE_LINE  = /^<!-- deploy-doc (?<kind>[-\w]+)( )?(?<params>.*) -->/
 
       def parse_block
         if (match = BLOCK_START.match(current_line)).nil?

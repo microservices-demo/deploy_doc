@@ -10,10 +10,11 @@ module DeployDoc
       docker_cmd = [
         "docker", 
         "run", 
+        "-it",
         "--rm", 
         envs, 
-        "-v#{data_dir}:/data/",
-        "-w/data/"
+        "-v#{data_dir}:/deploy_doc/data/",
+        "-w/deploy_doc/data/"
       ]
 
       # Expose the host host docker daemon in the child docker container.
