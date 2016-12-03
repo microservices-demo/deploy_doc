@@ -41,12 +41,15 @@ def run_phase(all_steps, name)
               retry
             rescue EOFError
               if buffer.length > 0
-                print_line(buffer)
-                break
+                lines = buffer.split("\n")
+                lines.each do |line|
+                  print_line(line)
+                end
               end
+              break
             end
             buffer += read
-            line,new_buffer = buffer.split("\n",2)
+            line, new_buffer = buffer.split("\n", 2)
             if new_buffer != nil
               print_line(line)
               buffer = new_buffer
