@@ -4,7 +4,7 @@ module DeployDoc
       configuration = parse_arguments(arguments)
 
       test_plan = TestPlan.from_file(configuration.markdown_file)
-      
+
       case configuration.action
         when :run then self.do_run(test_plan, configuration)
         when :dump_json then self.dump_json(test_plan, configuration)
@@ -37,7 +37,7 @@ module DeployDoc
         opts.on("-r", "--run-test", "Run tests") do
           configuration.action = :run
         end
-       
+
         opts.on("-j", "--dump-json", "Just parse the Markdown file and dump the steps to JSON") do
           configuration.action = :dump_json
         end
@@ -60,7 +60,7 @@ module DeployDoc
       if configuration.markdown_file.nil?
         raise DeployDoc::Error.new("No markdown file provided! Run `deploy_doc -h' to learn more about how to use this tool.")
       end
-      
+
       if configuration.action.nil?
         raise DeployDoc::Error.new("No action given. Either --run-tests, --dump-json or --shell-in-container must be specified")
       end
@@ -71,7 +71,7 @@ module DeployDoc
     def self.do_run(test_plan, configuration)
       status = nil
 
-      test_instructions_file = Tempfile.new("deploydoc")
+      test_instructions_file = Tempfile.new("deploydoc", "/tmp")
       test_instructions_file.write test_plan.to_json
       test_instructions_file.close
       runner_path = File.expand_path("../../../runner/runner.rb", __FILE__)
