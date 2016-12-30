@@ -3,6 +3,10 @@ require 'open3'
 $stdout.sync = true
 $stderr.sync = true
 
+# Travis kills jobs after 10 minutes of inactivity on stdout/stderr.
+# Output something in half that time
+NO_OUTPUT_TIMEOUT_IN_MIN = 5
+
 class StepFailed < RuntimeError
   def initialize(phase, location)
     super("on lines #{location} in phase #{phase}")
@@ -37,7 +41,13 @@ def run_phase(all_steps, name)
             begin
               read = stdout_stderr.read_nonblock(1024)
             rescue IO::EAGAINWaitReadable
-              IO.select([stdout_stderr])
+              fds_that_are_ready = IO.select([stdout_stderr], nil, nil, NO_OUTPUT_TIMEOUT_IN_MIN * 60)
+
+              if fds_that_are_ready.nil?
+                # Timeout occured, need to print something to STDOUT to prevent travis from killing this job
+                puts yellow { "  | " + bold { "No output for #{NO_OUTPUT_TIMEOUT_IN_MIN} minutes"  }  }
+              end
+
               retry
             rescue EOFError
               if buffer.length > 0
