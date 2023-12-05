@@ -1,4 +1,4 @@
-# DeployDoc
+# DEPRECATED: DeployDoc
 
 ## Synopsis
 With DeployDoc, you can test the deployment of your microservice constellation to multiple
